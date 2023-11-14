@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class AppTest {
   final Javalin app = new App().app; // inject any dependencies you might have
- // private final String usersJson = new JavalinJackson().toJsonString(UserController.users);
+  // private final String usersJson = new JavalinJackson().toJsonString(UserController.users);
 
   @Test
   public void integrationTest() {

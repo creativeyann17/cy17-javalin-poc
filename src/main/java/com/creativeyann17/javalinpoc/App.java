@@ -9,24 +9,18 @@ import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import io.javalin.http.staticfiles.Location;
 import io.javalin.json.JavalinJackson;
-import io.javalin.rendering.JavalinRenderer;
-import io.javalin.rendering.template.JavalinPebble;
-import io.javalin.util.ConcurrencyUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jetty.http.HttpHeader;
-import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.net.http.HttpHeaders;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class App {
@@ -34,6 +28,7 @@ public class App {
   private static final Random random = new Random(System.currentTimeMillis());
   private static final Health HEALTH = new Health("OK");
   private static final QueuedThreadPool queuedThreadPool = new QueuedThreadPool(16, 2, 60_000);
+  private static final String STARTED = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z").format(new Date());
 
   static {
     setRootLevel(Level.INFO);
@@ -59,12 +54,20 @@ public class App {
 
     this.app = Javalin.create(config -> {
         config.showJavalinBanner = true;
+        config.compression.gzipOnly();
         config.plugins.enableCors(cors -> {
           cors.add(it -> {
             it.anyHost();
             it.maxAge = 3600;
             it.allowCredentials = true;
             it.exposeHeader("*");
+          });
+          config.staticFiles.add(staticFiles -> {
+            staticFiles.directory = "/static";
+            staticFiles.location = Location.CLASSPATH;
+            staticFiles.hostedPath = "/";
+            staticFiles.precompress = true;
+            //staticFiles.headers = Map.of("last-modified", STARTED);
           });
         });
       /*  config.jetty.server(() -> {
@@ -74,13 +77,11 @@ public class App {
         });*/
         config.accessManager((handler, ctx, routeRoles) -> {
           var auth = ctx.header(HttpHeader.AUTHORIZATION.name());
-
-          if(publics.stream().anyMatch(s -> ctx.req().getRequestURI().startsWith(s))) {
+          if (publics.stream().anyMatch(s -> ctx.req().getRequestURI().startsWith(s))) {
             handler.handle(ctx);
           } else if (StringUtils.isBlank(auth)) {
             ctx.status(HttpStatus.UNAUTHORIZED).result("");
           }
-
         });
         config.jsonMapper(new JavalinJackson().updateMapper(mapper -> {
           mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
@@ -95,19 +96,25 @@ public class App {
       .get("/bench", App::bench)
       .get("/health", ctx -> ctx.json(HEALTH))
       .get("/secured", (context -> context.result("OK")))
-      .get("/session", (ctx ->{
-        System.out.println("Session: " +ctx.sessionAttributeMap());
+      .get("/session", (ctx -> {
+        System.out.println("Session: " + ctx.sessionAttributeMap());
         ctx.sessionAttribute("foo", "bar");
-        System.out.println("Cookie: "+ctx.cookieMap());
+        System.out.println("Cookie: " + ctx.cookieMap());
         ctx.cookie("cook", "me");
         ctx.result("OK");
       }))
-      .get("/error", (ctx) -> {throw new RuntimeException("Someting went badddd");});
+      .get("/error", (ctx) -> {
+        throw new RuntimeException("Someting went badddd");
+      });
 
 
     app.events(event -> {
-      event.serverStopping(() -> { log.info("Server stopping ..."); });
-      event.serverStopped(() ->{ log.info("Server stopped ..."); });
+      event.serverStopping(() -> {
+        log.info("Server stopping ...");
+      });
+      event.serverStopped(() -> {
+        log.info("Server stopped ...");
+      });
     });
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -121,21 +128,22 @@ public class App {
     new App().app.start(8080);
   }
 
-  private record Health(String status) implements Serializable {}
-
   private static void bench(Context ctx) throws InterruptedException {
     final long start = System.currentTimeMillis();
     var data = new byte[random.nextInt(100 * 1024)];
     //TimeUnit.MILLISECONDS.sleep(random.nextLong(300));
-   // CompletableFuture.runAsync(() -> {
-      log.info("Data processed: {} {} {} ({}ms)", ctx.req().getMethod(), ctx.req().getRequestURI(), FileUtils.byteCountToDisplaySize(data.length), System.currentTimeMillis() - start);
+    // CompletableFuture.runAsync(() -> {
+    log.info("Data processed: {} {} {} ({}ms)", ctx.req().getMethod(), ctx.req().getRequestURI(), FileUtils.byteCountToDisplaySize(data.length), System.currentTimeMillis() - start);
 
-   // }, queuedThreadPool.getVirtualThreadsExecutor());
-     ctx.result("DONE");
+    // }, queuedThreadPool.getVirtualThreadsExecutor());
+    ctx.result("DONE");
   }
 
   public static void setRootLevel(Level level) {
     final ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-      root.setLevel(level);
+    root.setLevel(level);
+  }
+
+  private record Health(String status) implements Serializable {
   }
 }
