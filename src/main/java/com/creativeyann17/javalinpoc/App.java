@@ -20,12 +20,10 @@ import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
-import java.util.Random;
 
 @Slf4j
 public class App {
 
-  private static final Random random = new Random(System.currentTimeMillis());
   private static final Health HEALTH = new Health("OK");
   private static final QueuedThreadPool queuedThreadPool = new QueuedThreadPool(16, 2, 60_000);
   private static final String STARTED = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z").format(new Date());
@@ -130,10 +128,10 @@ public class App {
 
   private static void bench(Context ctx) throws InterruptedException {
     final long start = System.currentTimeMillis();
-    var data = new byte[random.nextInt(100 * 1024)];
+    var data = "";
     //TimeUnit.MILLISECONDS.sleep(random.nextLong(300));
     // CompletableFuture.runAsync(() -> {
-    log.info("Data processed: {} {} {} ({}ms)", ctx.req().getMethod(), ctx.req().getRequestURI(), FileUtils.byteCountToDisplaySize(data.length), System.currentTimeMillis() - start);
+    log.info("Data processed: {} {} {} ({}ms)", ctx.req().getMethod(), ctx.req().getRequestURI(), FileUtils.byteCountToDisplaySize(data.length()), System.currentTimeMillis() - start);
 
     // }, queuedThreadPool.getVirtualThreadsExecutor());
     ctx.result("DONE");
